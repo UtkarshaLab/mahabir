@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: CC0](https://img.shields.io/badge/License-CC0-green.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
-[![x86_64: Active](https://img.shields.io/badge/x86__64-Active-brightgreen.svg)]()
+[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)]()
 [![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]()
 [![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-yellow.svg)]()
 
@@ -11,22 +11,22 @@
 > _This library is named in honor of **Dr. Mahabir Pun**, a distinguished Nepalese teacher, scientist, and social entrepreneur renowned for his pioneering work in introducing wireless technologies to remote mountainous communities and fostering national innovation._
 
 ```
-                       ┌──────────────────────────────────────┐
-                       │        Mahabir Unified API           │
-                       │   (hash, keyed, derive, xof, pw, kdf)│
-                       └──────────────────┬───────────────────┘
-                                          │
-                  ┌───────────────────────┴───────────────────────┐
-                  │                                               │
-      ┌───────────▼───────────┐                       ┌───────────▼───────────┐
-      │     FAST PATH         │                       │     HARD PATH         │
-      │  (Direct BLAKE3 Core) │                       │ (Memory-Hard Argon2id)│
-      │                       │                       │                       │
-      │ ⚡ Standard Hash       │                       │ 🧠 H0 Generation (XOF)│
-      │ ⚡ Keyed Hash (MAC)    │                       │ 🧠 Parallel Lanes (p) │
-      │ ⚡ Key Derivation (KDF)│                       │ 🧠 GB Block Comp & G  │
-      │ ⚡ Extendable Out (XOF)│                       │ 🧠 Non-uniform Map Φ  │
-      └───────────────────────┘                       └───────────────────────┘
+                        ┌──────────────────────────────────────┐
+                        │        Mahabir Unified API           │
+                        │   (hash, keyed, derive, xof, pw, kdf)│
+                        └──────────────────┬───────────────────┘
+                                           │
+                   ┌───────────────────────┴───────────────────────┐
+                   │                                               │
+       ┌───────────▼───────────┐                       ┌───────────▼───────────┐
+       │     FAST PATH         │                       │     HARD PATH         │
+       │  (Direct BLAKE3 Core) │                       │ (Memory-Hard Argon2id)│
+       │                       │                       │                       │
+       │ ⚡ Standard Hash      │                       │ 🧠 H0 Generation (XOF) │
+       │ ⚡ Keyed Hash (MAC)   │                       │ 🧠 Parallel Lanes (p)  │
+       │ ⚡ Key Derivation (KDF)│                       │ 🧠 GB Block Comp & G   │
+       │ ⚡ Extendable Out (XOF)│                       │ 🧠 Non-uniform Map Φ   │
+       └───────────────────────┘                       └───────────────────────┘
 ```
 
 ---
@@ -56,7 +56,7 @@
 
 Mahabir is built for extreme efficiency, employing CPU-specific hand-crafted assembly:
 
-*   **x86_64 (Active)**: Fully implemented using NASM syntax and Intel operand order. Supports scalar execution along with SSE2, SSE4.1, AVX2, and AVX512 vector pipelines.
+*   **x86_64 (Development)**: Fully implemented using NASM syntax and Intel operand order. Supports scalar execution along with SSE2, SSE4.1, AVX2, and AVX512 vector pipelines.
 *   **AArch64 (Reserved)**: Planned for future implementation. GNU Assembler (as) syntax. Stubbed build targets trigger helpful errors.
 *   **RISC-V (Reserved)**: Planned for future implementation. GNU Assembler (as) syntax. Stubbed build targets trigger helpful errors.
 
@@ -358,7 +358,7 @@ make bench
 *   **Specification & Documentation**: Licensed under the **Creative Commons Zero 1.0 Universal License (CC0)** (Public Domain Dedication). Feel free to use the blueprints to build your own implementations.
 *   **Code Implementation**: Hand-written assembly files, Makefiles, headers, and test scripts are licensed under the **MIT License**.
 
-See [LICENSE](file:///c:/Users/rajku/OneDrive/Desktop/All Projects/UtkarshaLab/mahabir/LICENSE) for details.
+See [LICENSE](LICENSE) for details.
 
 ---
 
