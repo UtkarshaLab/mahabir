@@ -37,7 +37,7 @@
 ## 📖 Table of Contents
 1. [Multi-Architecture Support Status](#-multi-architecture-support-status)
 2. [Project Architecture](#-project-architecture)
-3. [Directory Layout](#-directory-layout)
+3. [Project Layout](#-project-layout)
 4. [Unified API Reference](#-unified-api-reference)
     - [Fast Modes (Standalone BLAKE3)](#fast-modes-standalone-blake3)
     - [Hard Modes (Memory-Hard Argon2id)](#hard-modes-memory-hard-argon2id)
@@ -103,7 +103,7 @@ graph TD
 
 ---
 
-## 📂 Directory Layout
+## 📂 Project Layout
 
 ```
 mahabir/
