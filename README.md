@@ -94,7 +94,7 @@ graph TD
     Fast --> B3_SSE2[BLAKE3 SSE2]
     Fast --> B3_SSE41[BLAKE3 SSE4.1]
     Fast --> B3_AVX2[BLAKE3 AVX2]
-    Fast --> B3_AVX512[BLAKE3 AVX-512]
+    Fast --> B3_AVX_512[BLAKE3 AVX-512]
     
     %% Hard Path
     API -->|m >= 8p| Hard[Hard Path: memory-hard]
