@@ -25,10 +25,10 @@
        │     FAST PATH         │                       │     HARD PATH         │
        │  (Direct BLAKE3 Core) │                       │ (Memory-Hard Argon2id)│
        │                       │                       │                       │
-       │ ⚡ Standard Hash      │                       │ 🧠 H0 Generation (XOF) │
-       │ ⚡ Keyed Hash (MAC)   │                       │ 🧠 Parallel Lanes (p)  │
-       │ ⚡ Key Derivation (KDF)│                       │ 🧠 GB Block Comp & G   │
-       │ ⚡ Extendable Out (XOF)│                       │ 🧠 Non-uniform Map Φ   │
+       │ > Standard Hash       │                       │ > H0 Generation (XOF) │
+       │ > Keyed Hash (MAC)    │                       │ > Parallel Lanes (p)  │
+       │ > Key Derivation (KDF)│                       │ > GB Block Comp & G   │
+       │ > Extendable Out (XOF)│                       │ > Non-uniform Map Φ   │
        └───────────────────────┘                       └───────────────────────┘
 ```
 
