@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: CC0](https://img.shields.io/badge/License-CC0-green.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
-[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)]()
-[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]()
-[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-Reserved-yellow.svg)]()
+[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)](#-multi-architecture-support-status)
+[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)](#-multi-architecture-support-status)
+[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-Reserved-yellow.svg)](#-multi-architecture-support-status)
 
 > **Mahabir** is a zero-dependency, unified cryptography library written entirely in assembly.
 > Fast modes (hash, MAC, KDF, XOF) use BLAKE3. Memory-hard modes (password, KDF) use the
@@ -72,7 +72,7 @@
 
 ## 🗺️ Multi-Architecture Support Status
 
-Mahabir is built for extreme efficiency, employing CPU-specific hand-crafted assembly:
+Mahabir is designed for efficiency, using CPU-specific assembly:
 
 *   **x86_64 (Active development)**: NASM syntax. Scalar path in progress, SIMD paths planned.
 *   **AArch64 (Reserved)**: Planned for future implementation. GNU Assembler (as) syntax. Stubbed build targets trigger helpful errors.
@@ -105,7 +105,7 @@ graph TD
     MMap --> Threads[Parallel Lanes Thread Pool]
     Threads --> StepG[G Permutation & GB Block Comp]
     StepG --> ScalarG[G Scalar / Simd Dispatch]
-    StepG --> SimdG[SSE4.1 / AVX2 / AVX512]
+    StepG --> SimdG[SSE4.1 / AVX2 / AVX-512]
     
     Threads --> Phi[Phi Function Selection]
     Phi --> Pass0[Pass 0: Pseudo-Random Data-Independent]
@@ -140,7 +140,7 @@ mahabir/
 │   │   ├── platform.inc                # Build-time CPU detection macro flags
 │   │   └── syscall_linux.inc           # Linux syscall numbers for standalone tests
 │   ├── src/                            # BLAKE3 implementations
-│   │   ├── x86_64/                     # ACTIVE — Hand-written x86_64 assembly (Scalar, SSE2, SSE4.1, AVX2, AVX512)
+│   │   ├── x86_64/                     # ACTIVE — Hand-written x86_64 assembly (Scalar, SSE2, SSE4.1, AVX2, AVX-512)
 │   │   ├── aarch64/                    # RESERVED — Empty placeholders for Neon support
 │   │   └── riscv/                      # RESERVED — Empty placeholders for RVV support
 │   ├── test/                           # BLAKE3 test suite
@@ -322,15 +322,15 @@ At startup, Mahabir queries CPU features (such as CPUID leaf 1 & 7 on `x86_64`) 
 | **SSE2** | SSE2 vector path | 2 parallel instances | `XMM0`–`XMM7` |
 | **SSE4.1** | SSE4.1 + shuffles | 2 parallel instances | `XMM0`–`XMM15` |
 | **AVX2** | AVX2 vector path | 4 parallel instances | `YMM0`–`YMM15` |
-| **AVX512** | AVX512 vector path | 8 parallel instances | `ZMM0`–`ZMM31` |
+| **AVX-512** | AVX-512 vector path | 8 parallel instances | `ZMM0`–`ZMM31` |
 
 #### Mahabir G / GB CPU Dispatching
 | CPU Target | SIMD Optimization | G / GB Pipeline Capabilities | Sinks |
 | :--- | :--- | :--- | :--- |
 | **Scalar** | Fallback baseline | 64-bit additions, XORs, ROTR64, scalar 32x32->64 multiply | Standard registers |
 | **SSE4.1** | SSE4.1 + `pshufb` | 2 parallel channels, 64-bit shuffles, `pmuludq` multiply | `XMM0`–`XMM15` |
-| **AVX2** | AVX2 vector path | 4 parallel channels, wide row scheduling, `pmuludq` multiply | `YMM0`–`YMM15` |
-| **AVX512** | AVX512 + `vprorq` | 8 parallel channels, native rotates, `vpmuludq` multiply | `ZMM0`–`ZMM31` |
+| **AVX2** | AVX2 vector path | 4 parallel channels, wide row scheduling, `vpmuludq` multiply | `YMM0`–`YMM15` |
+| **AVX-512** | AVX-512 + `vprorq` | 8 parallel channels, native rotates, `vpmuludq` multiply | `ZMM0`–`ZMM31` |
 
 *Note: SSE2 is omitted for G/GB — its 32-bit lanes cannot perform the 64-bit rotations and 32-bit LSB32 multiply required by Argon2id's G function.*
 
