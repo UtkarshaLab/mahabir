@@ -1,0 +1,366 @@
+# 🌌 Mahabir
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: CC0](https://img.shields.io/badge/License-CC0-green.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
+[![x86_64: Active](https://img.shields.io/badge/x86__64-Active-brightgreen.svg)]()
+[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]()
+[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-yellow.svg)]()
+
+> **Mahabir** is a ultra-high-performance, zero-dependency, unified cryptography library written entirely in highly optimized assembly (NASM for x86_64, with AArch64 and RISC-V architectures reserved for future implementation). It fuses a standalone assembly implementation of the state-of-the-art **BLAKE3** hash with a highly parallelizable memory-hard password hashing and key derivation function modeled after **Argon2id** (RFC 9106).
+>
+> _This library is named in honor of **Dr. Mahabir Pun**, a distinguished Nepalese teacher, scientist, and social entrepreneur renowned for his pioneering work in introducing wireless technologies to remote mountainous communities and fostering national innovation._
+
+```
+                       ┌──────────────────────────────────────┐
+                       │        Mahabir Unified API           │
+                       │   (hash, keyed, derive, xof, pw, kdf)│
+                       └──────────────────┬───────────────────┘
+                                          │
+                  ┌───────────────────────┴───────────────────────┐
+                  │                                               │
+      ┌───────────▼───────────┐                       ┌───────────▼───────────┐
+      │     FAST PATH         │                       │     HARD PATH         │
+      │  (Direct BLAKE3 Core) │                       │ (Memory-Hard Argon2id)│
+      │                       │                       │                       │
+      │ ⚡ Standard Hash       │                       │ 🧠 H0 Generation (XOF)│
+      │ ⚡ Keyed Hash (MAC)    │                       │ 🧠 Parallel Lanes (p) │
+      │ ⚡ Key Derivation (KDF)│                       │ 🧠 GB Block Comp & G  │
+      │ ⚡ Extendable Out (XOF)│                       │ 🧠 Non-uniform Map Φ  │
+      └───────────────────────┘                       └───────────────────────┘
+```
+
+---
+
+## 📖 Table of Contents
+1. [Multi-Architecture Support Status](#-multi-architecture-support-status)
+2. [Project Architecture](#-project-architecture)
+3. [Directory Layout](#-directory-layout)
+4. [Unified API Reference](#-unified-api-reference)
+    - [Fast Modes (Standalone BLAKE3)](#fast-modes-standalone-blake3)
+    - [Hard Modes (Memory-Hard Argon2id)](#hard-modes-memory-hard-argon2id)
+5. [Algorithm & Internal Specifications](#-algorithm--internal-specifications)
+    - [BLAKE3 Layout & Primitive](#1-blake3-layout--primitive)
+    - [Argon2id Memory-Hard Core](#2-argon2id-memory-hard-core)
+    - [G Mixing & GB Block Compression](#3-g-mixing--gb-block-compression)
+    - [Thread Sync & Segment Barriers](#4-thread-sync--segment-barriers)
+    - [Runtime CPU SIMD Dispatching](#5-runtime-cpu-simd-dispatching)
+6. [Building & Compiling](#-building--compiling)
+7. [Verification & Testing](#-verification--testing)
+8. [Benchmarking](#-benchmarking)
+9. [Security Considerations](#-security-considerations)
+10. [Licensing](#-licensing)
+
+---
+
+## 🗺️ Multi-Architecture Support Status
+
+Mahabir is built for extreme efficiency, employing CPU-specific hand-crafted assembly:
+
+*   **x86_64 (Active)**: Fully implemented using NASM syntax and Intel operand order. Supports scalar execution along with SSE2, SSE4.1, AVX2, and AVX512 vector pipelines.
+*   **AArch64 (Reserved)**: Planned for future implementation. GNU Assembler (as) syntax. Stubbed build targets trigger helpful errors.
+*   **RISC-V (Reserved)**: Planned for future implementation. GNU Assembler (as) syntax. Stubbed build targets trigger helpful errors.
+
+---
+
+## 🏛️ Project Architecture
+
+Mahabir separates its foundation (standalone BLAKE3) from the memory-hard application layers. The top-level system is unified through a single API dispatcher.
+
+```mermaid
+graph TD
+    User([User Application]) --> API{Mahabir API}
+    
+    %% Fast Path
+    API -->|m = 0, t = 1| Fast[Fast Path: Direct BLAKE3]
+    Fast --> B3_Scalar[BLAKE3 Scalar]
+    Fast --> B3_SSE2[BLAKE3 SSE2]
+    Fast --> B3_SSE41[BLAKE3 SSE4.1]
+    Fast --> B3_AVX2[BLAKE3 AVX2]
+    Fast --> B3_AVX512[BLAKE3 AVX512]
+    
+    %% Hard Path
+    API -->|m >= 8p, t >= 1| Hard[Hard Path: memory-hard]
+    Hard --> Init[H0 Generation via BLAKE3 XOF]
+    Init --> FillInit[H' First 2 Columns Init]
+    FillInit --> MMap[Memory Pool Allocation]
+    
+    MMap --> Threads[Parallel Lanes Thread Pool]
+    Threads --> StepG[G Permutation & GB Block Comp]
+    StepG --> ScalarG[G Scalar / Simd Dispatch]
+    StepG --> SimdG[SSE4.1 / AVX2 / AVX512]
+    
+    Threads --> Phi[Phi Function Selection]
+    Phi --> Pass0[Pass 0: Pseudo-Random Data-Independent]
+    Phi --> PassN[Pass N: Data-Dependent Feedback]
+    
+    Threads --> Sync[Sync & Segment Barriers]
+    Sync --> Finalize[XOR & Tag Extraction]
+    Finalize --> Output([Final Hash Tag])
+```
+
+---
+
+## 📂 Directory Layout
+
+```
+mahabir/
+│
+├── Makefile                            # Top-level build orchestrator: builds blake3/ first, then mahabir/
+├── README.md                           # Project overview (This file)
+├── LICENSE                             # CC0 for specification, MIT for implementation code
+│
+├── spec/                               # Algorithm specification (Non-code)
+│   └── v1.0.md                         # Mahabir spec: parameters, construction, and security analysis
+│
+├── blake3/                             # STANDALONE BLAKE3 — foundation layer (built first)
+│   ├── blake3.asm                      # Top-level entry. Exports: hash, keyed_hash, derive_key, xof
+│   ├── Makefile                        # Builds libblake3.a (static) or blake3.so (shared)
+│   ├── include/                        # BLAKE3 common macros & layouts
+│   │   ├── api.inc                     # Public signatures (C ABI compatible)
+│   │   ├── state.inc                   # BLAKE3 state struct: cv, block, chunk_counter, flags, block_len, etc.
+│   │   ├── constants.inc               # IV, MSG_SCHEDULE (sigma), ROTR constants {16, 12, 8, 7} for 32-bit
+│   │   ├── platform.inc                # Build-time CPU detection macro flags
+│   │   └── syscall_linux.inc           # Linux syscall numbers for standalone tests
+│   ├── src/                            # BLAKE3 implementations
+│   │   ├── x86_64/                     # ACTIVE — Hand-written x86_64 assembly (Scalar, SSE2, SSE4.1, AVX2, AVX512)
+│   │   ├── aarch64/                    # RESERVED — Empty placeholders for Neon support
+│   │   └── riscv/                      # RESERVED — Empty placeholders for RVV support
+│   ├── test/                           # BLAKE3 test suite
+│   │   ├── x86_64/                     # Test drivers for hashing, keyed hashing, KDF, and XOF
+│   │   ├── aarch64/                    # RESERVED — Empty
+│   │   └── riscv/                      # RESERVED — Empty
+│   └── bench/                          # BLAKE3 throughput and cycle benchmarks
+│
+├── mahabir/                            # MAHABIR PROPER — memory-hard hashing engine
+│   ├── mahabir.asm                     # Unified API dispatcher entrypoint
+│   ├── Makefile                        # Builds libmahabir.a (links with ../blake3/libblake3.a)
+│   ├── include/                        # Mahabir internal configs and layouts
+│   │   ├── api.inc                     # API signatures (hash, keyed, derive, xof, password, kdf)
+│   │   ├── params.inc                  # Parameter struct offsets & validation macros
+│   │   ├── fast.inc / hard.inc         # Fast path vs memory-hard path internal signatures
+│   │   ├── blake3.inc                  # Direct BLAKE3 XOF interface wrapper
+│   │   ├── g.inc / gb.inc              # G function calling rules and GB row/col matrix mappings
+│   │   ├── phi.inc / memory.inc        # Phi reference lookup & Memory Pool offsets
+│   │   ├── sync.inc                    # Spinlocks, Futexes, and memory fences
+│   │   ├── zeroize.inc                 # Clean wipe macros for memory & registers
+│   │   └── platform.inc                # Inherits CPU detection macros from BLAKE3 platform.inc
+│   ├── src/                            # Mahabir implementation sources
+│   │   ├── x86_64/                     # ACTIVE — NASM implementation
+│   │   │   ├── api/                    # Public dispatcher logic, param checks, verify, encoding, and decoding
+│   │   │   ├── fast/                   # Fast wrappers mapping API directly to BLAKE3
+│   │   │   ├── hard/                   # Core Argon2id assembly engine (G, GB, Phi, Tag, XOR, thread scheduler)
+│   │   │   └── dispatch/               # Feature detection table for fast & hard modes
+│   │   ├── aarch64/                    # RESERVED — Empty placeholders for future AArch64 implementation
+│   │   └── riscv/                      # RESERVED — Empty placeholders for future RISC-V implementation
+│   ├── test/                           # Mahabir test drivers
+│   │   ├── x86_64/                     # Tests for fast API, hard-H', G, GB, Phi, password hashing, and KDF
+│   │   ├── aarch64/                    # RESERVED — Empty
+│   │   └── riscv/                      # RESERVED — Empty
+│   └── bench/                          # Mahabir latency, throughput, peak RSS, and system benchmarks
+```
+
+---
+
+## ⚙️ Unified API Reference
+
+Mahabir provides a unified interface. Fast modes bypass memory allocation pipelines, while Hard modes utilize multi-threaded memory-hard structures.
+
+### Fast Modes (Standalone BLAKE3)
+These methods do not use memory pools or thread barriers, utilizing pure SIMD pipeline speeds.
+
+#### 1. Standard Hashing
+```c
+void mahabir_hash(const uint8_t *data, size_t len, uint8_t out[32]);
+```
+*   **Description**: Hashes input data of length `len` using standard BLAKE3 and stores the 32-byte hash in `out`.
+
+#### 2. Keyed Hashing (MAC)
+```c
+void mahabir_keyed(const uint8_t key[32], const uint8_t *data, size_t len, uint8_t out[32]);
+```
+*   **Description**: Computes a 256-bit Message Authentication Code (MAC) using the specified 32-byte key.
+
+#### 3. Key Derivation Function (KDF)
+```c
+void mahabir_derive(const char *context, const uint8_t *material, size_t len, uint8_t out[32]);
+```
+*   **Description**: Safely derives a high-entropy 32-byte subkey from a context string and input keying material.
+
+#### 4. Extendable Output Function (XOF)
+```c
+void mahabir_xof(const uint8_t *data, size_t len, uint8_t *out, size_t out_len);
+```
+*   **Description**: Extendable Output Function. Produces an arbitrary stream of pseudo-random bytes of length `out_len` based on the input.
+
+---
+
+### Hard Modes (Memory-Hard Argon2id)
+These functions utilize multi-threaded memory-hard constructs to defend against custom ASIC/FPGA dictionary attacks.
+
+#### 5. Password Hashing
+```c
+int mahabir_password(const uint8_t *pw, size_t pw_len,
+                     const uint8_t *salt, size_t salt_len,
+                     const uint8_t *pepper, size_t pepper_len,
+                     uint32_t p, uint32_t T, uint32_t m, uint32_t t,
+                     uint8_t *out);
+```
+*   **Description**: Generates a secure memory-hard password tag and writes it to `out`.
+*   **Returns**: `0` on success, non-zero error code if parameter validation fails.
+
+#### 6. Key Derivation (Hard KDF)
+```c
+int mahabir_kdf(const uint8_t *secret, size_t secret_len,
+                const uint8_t *salt, size_t salt_len,
+                uint32_t p, uint32_t T, uint32_t m, uint32_t t,
+                uint8_t *out);
+```
+*   **Description**: A hard KDF to generate high-entropy keys from secret materials (like master keys) with robust memory-hardness parameters.
+
+---
+
+## 🧠 Algorithm & Internal Specifications
+
+### 1. BLAKE3 Layout & Primitive
+The standalone `blake3/` core utilizes the official state structure layout to compute compression nodes inside a binary tree configuration:
+
+```
++---------------------------------------------------------------------------------+
+|                                 BLAKE3 State                                    |
++-------------------+--------------------+-------------------+-------+------------+
+|  cv (32 bytes)    |  block (64 bytes)  |  counter (8 bytes)| flags | block_len  |
+|  (8 x u32 words)  |  (16 x u32 words)  |  (64-bit index)   | (1 B) | (1 Byte)   |
++-------------------+--------------------+-------------------+-------+------------+
+```
+*   **Chaining Values (CV)**: Vector paths are initialized using fractional parts of SHA-256 constants (`IV[8]`).
+*   **Rotations**: Scaled using ROTR constants `{16, 12, 8, 7}` for 32-bit words.
+*   **Extendable Output Function (XOF)**: Operates by feeding the root output block back through the compression cycle with distinct flags and random offsets.
+
+### 2. Argon2id Memory-Hard Core
+The hard mode is a hybrid construction incorporating the **Argon2id** design (RFC 9106):
+*   **Parameter Limits**: Parallelism $p \le 2^{24}$, tag size $T \ge 4$, memory blocks $m \ge 8p$, iterations $t \ge 1$, salt $8 \le S \le 64$ bytes, pepper $0 \le P \le 64$ bytes.
+*   **H0 Hash Block**: Derived by processing little-endian concatenated configuration parameters, context details, salt, pepper, and password strings through a single BLAKE3 XOF run to yield a 64-byte block.
+*   **Memory Matrix**: Sized in multiples of 1024-byte blocks. Page-aligned to 4096-byte boundaries:
+    $$\text{BLOCK\_OFFSET} = \text{base} + (\text{lane} \times q + \text{col}) \times 1024$$
+*   **Phi Selection ($\Phi$)**:
+    *   **Pass 0 (First Half)**: Data-independent reference index computed from a pseudo-random block generated by BLAKE3 XOF on position bounds.
+    *   **Pass 0 (Second Half) & Pass N**: Data-dependent. Reference index $J_1 || J_2$ is obtained by parsing the first 64 bits of the previous block ($B[i][j-1]$).
+    *   **Mapping Bias**: Implements $\Phi_{\text{map}} = J_1^2 \gg 32$ to skew references toward recently computed blocks, defeating Time-Memory Trade-Off (TMTO) attacks.
+
+### 3. G Mixing & GB Block Compression
+*   **G Permutation**: Unlike BLAKE3's 32-bit logic, the memory-hard $G$ mixing function utilizes **64-bit words** (similar to BLAKE2b) and performs additions, XORs, and 64-bit rotations with constant offsets `{32, 24, 16, 63}`.
+*   **GB Compression**: Sized at 128 words (8 rows × 16 columns of 64-bit words). It takes two blocks $X$ and $Y$, performs an element-wise XOR $R = X \oplus Y$, and then loops:
+    1.  Applies the $G$ permutation across the 8 rows (8 G calls).
+    2.  Applies the $G$ permutation across the 8 columns (8 G calls).
+    3.  Element-wise XORs the output with the initial matrix: $\text{Out} = \text{Result} \oplus R$.
+
+```
+     8 Rows of 16 Columns (64-bit Words)
+  +─────────────────────────────────────────+
+  │ w0  w1  w2  w3  w4  w5  w6  w7  ... w15 │ -> Row 0 (G Mixer 0)
+  │ w16 w17 w18 w19 w20 w21 w22 w23 ... w31 │ -> Row 1 (G Mixer 1)
+  │ ...                                     │
+  │ w112 ...                       ... w127 │ -> Row 7 (G Mixer 7)
+  +─────────────────────────────────────────+
+     │   │   │   │
+     ▼   ▼   ▼   ▼ 
+   Col 0,1,2,3 (G Column Mixer Cycles)
+```
+
+### 4. Thread Sync & Segment Barriers
+*   **Segments**: The column space is divided into 4 identical quadrants.
+*   **Lanes**: Run concurrently in parallel threads (assigned up to $p$ lanes).
+*   **Sync Points**: Parallel execution is locked with 4 synchronization barriers per iteration pass (Segment 0 $\rightarrow$ 1, 1 $\rightarrow$ 2, 2 $\rightarrow$ 3, and 3 $\rightarrow$ Next Pass).
+*   **Primitives**: Thread coordination is achieved via lightweight spinlocks combined with `SYS_futex` system calls to put idle threads to sleep and prevent high CPU overhead.
+
+### 5. Runtime CPU SIMD Dispatching
+At startup, Mahabir executes feature queries (such as CPUID leaf 1 & 7 on `x86_64`) to identify instruction capabilities. The optimal vector implementation is selected dynamically:
+
+| CPU Target | BLAKE3 Dispatch | Mahabir G / GB Pipeline | Registers Sinks |
+| :--- | :--- | :--- | :--- |
+| **Scalar** | Scalar fallback | 64-bit additions, XORs, ROTR64 | Standard registers |
+| **SSE2** | 2 parallel instances | *Not utilized (32-bit lane limits)* | `XMM0`–`XMM7` |
+| **SSE4.1** | 2 parallel + shuffles | 2 parallel channels, `pshufb` 64-bit shuffles | `XMM0`–`XMM15` |
+| **AVX2** | 4 parallel instances | 4 parallel channels, wide message scheduling | `YMM0`–`YMM15` |
+| **AVX512** | 8 parallel instances | 8 parallel channels, native `vprorq` instructions | `ZMM0`–`ZMM31` |
+
+---
+
+## 🛠️ Building & Compiling
+
+The top-level `Makefile` orchestrates compilation. It will automatically build the standalone BLAKE3 library, build the Mahabir proper engine, link them together, and run testing executables.
+
+### Prerequisites
+*   **Operating System**: Linux (highly optimized syscall path) or Windows (via MSYS2/MinGW).
+*   **Assembler**: `NASM` (for x86_64) and `GNU binutils` (assembler and linker).
+*   **Compilers/Tools**: GNU `make`, `gcc` (for test orchestration and harness setup).
+
+### Standard Build
+```bash
+# Clone the repository
+git clone https://github.com/UtkarshaLab/mahabir.git
+cd mahabir
+
+# Build everything (libblake3.a, libmahabir.a, and test executables)
+make
+
+# Compile for a specific architecture (triggers stub errors on aarch64/riscv)
+make ARCH=x86_64
+make ARCH=aarch64
+```
+
+---
+
+## 🧪 Verification & Testing
+
+To run the complete test suite:
+```bash
+make test
+```
+
+### Test Scope
+*   **BLAKE3 Standalone Suite**: Validates standard hashing, MACs, context key derivation, and seeks against C2SP-compliant vector binaries.
+*   **G & GB Permutation Tests**: Compares transformations against expected matrices block-by-block.
+*   **Phi Function Tests**: Asserts bias constraints and mapping ranges.
+*   **Verification Round-Trip**: Encodes parameters, computes tags, decodes parameters, and asserts verification passes.
+*   **Invalid Param Suite**: Verifies parameters (e.g. invalid memory parameters, short salts, bad thread count) are rejected with appropriate error codes.
+
+---
+
+## 📊 Benchmarking
+
+To run latency and throughput benchmarks:
+```bash
+make bench
+```
+
+### Metrics Checked
+*   **Throughput (Fast)**: Evaluates MiB/sec rates for basic hashes. Shows SIMD scaling efficiency.
+*   **Latency (Hard)**: Evaluates exact cycle counts for memory-hard operations.
+*   **Memory Footprint**: Verifies actual Peak Resident Set Size (RSS) during execution by parsing `/proc/self/status`.
+*   **System Competitors**: Measures performance against native OpenSSL, standard SHA256, and generic `libargon2` implementations.
+
+---
+
+## 🔒 Security Considerations
+
+> [!WARNING]  
+> **Cryptographic Implementation Notice**: This library utilizes hand-crafted, raw assembly language. Although designed for high-performance and audited for memory protection, use it with standard caution inside highly critical production systems.
+
+*   **Volatile State Zeroization**: State variables, message blocks, and the memory pool matrix are wiped clean using the `ZEROIZE` macro (volatile store operations + memory fences like `mfence`) to prevent compilers or optimization steps from optimizing away the cleanup.
+*   **Constant-Time Comparisons**: Password comparisons are evaluated using double XOR reduction loops, preventing timing side-channel attacks.
+*   **Thread Safety**: Core allocations are sandboxed inside caller-specified boundaries. Global dispatch tables are initialized using thread-safe, atomic double-check flags (`compare-and-swap`).
+
+---
+
+## 📄 Licensing
+
+*   **Specification & Documentation**: Licensed under the **Creative Commons Zero 1.0 Universal License (CC0)** (Public Domain Dedication). Feel free to use the blueprints to build your own implementations.
+*   **Code Implementation**: Hand-written assembly files, Makefiles, headers, and test scripts are licensed under the **MIT License**.
+
+See [LICENSE](file:///c:/Users/rajku/OneDrive/Desktop/All Projects/UtkarshaLab/mahabir/LICENSE) for details.
+
+---
+
+_UtkarshaLab — Engineering the Foundation of Tomorrow_
+
