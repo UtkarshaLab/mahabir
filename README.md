@@ -273,13 +273,13 @@ The hard mode is a hybrid construction incorporating the **Argon2id** design (RF
     *   **Hashed Output Tag Size ($T$)**: Exactly **64 bytes** (512 bits) written to the output buffer.
 *   **Pepper Pool**: The server maintains a secure, installation-time pool of exactly **64 permanent, independent peppers** ($N = 64$), where each pepper is **exactly 64 bytes**. The 4 KiB pool ($64 \times 64$ bytes) is loaded into the server's private RAM at boot.
 *   **Salt-Deterministic Routing**: The salt is generated as a secure, random **64-byte value**. To completely hide the pepper index from database logs or hash strings, the target pepper index is resolved dynamically and automatically from the salt itself:
-    $$\text{pepper\_index} = \text{BLAKE3}(\text{salt}) \pmod{64}$$
+    $$\text{pepper}_{\text{index}} = \text{BLAKE3}(\text{salt}) \pmod{64}$$
     In high-performance assembly/C, this is optimized as a bitwise AND:
-    $$\text{pepper\_index} = \text{BLAKE3}(\text{salt})[0] \ \& \ 63$$
+    $$\text{pepper}_{\text{index}} = \text{BLAKE3}(\text{salt})[0] \ \text{AND} \ 63$$
     The resulting index selects the specific key from the pool (`PEPPERS[pepper_index]`) to run the hashing and verification logic, distributing user credentials uniformly across all 64 keys for maximum sharded protection.
 *   **H0 Hash Block**: Derived by processing little-endian concatenated configuration parameters. Formula:
-    $$H_0 = \text{BLAKE3-XOF}(\text{LE32}(p) \mathbin{\Vert} \text{LE32}(T) \mathbin{\Vert} \text{LE32}(m) \mathbin{\Vert} \text{LE32}(t) \mathbin{\Vert} \text{LE32}(0\text{x}14) \mathbin{\Vert} \text{LE32}(2) \mathbin{\Vert} \text{LE32}(|P|) \mathbin{\Vert} P \mathbin{\Vert} \text{LE32}(|S|) \mathbin{\Vert} S \mathbin{\Vert} \text{LE32}(|K|) \mathbin{\Vert} K \mathbin{\Vert} \text{LE32}(|X|) \mathbin{\Vert} X)$$
-    *Where $0\text{x}14$ is the Mahabir version (20 decimal) and $2$ is the type indicating the Argon2id construction.*
+    $$H_0 = \text{BLAKE3-XOF}(\text{LE32}(p) \mathbin{\Vert} \text{LE32}(T) \mathbin{\Vert} \text{LE32}(m) \mathbin{\Vert} \text{LE32}(t) \mathbin{\Vert} \text{LE32}(0x14) \mathbin{\Vert} \text{LE32}(2) \mathbin{\Vert} \text{LE32}(|P|) \mathbin{\Vert} P \mathbin{\Vert} \text{LE32}(|S|) \mathbin{\Vert} S \mathbin{\Vert} \text{LE32}(|K|) \mathbin{\Vert} K \mathbin{\Vert} \text{LE32}(|X|) \mathbin{\Vert} X)$$
+    *Where 0x14 is the Mahabir version (20 decimal) and 2 is the type indicating the Argon2id construction.*
 *   **Parameter Mapping**: The associated data parameter $X$ is not exposed in the public API. It is hardcoded as empty with $\text{LE32}(|X|) = \text{LE32}(0) = \text{0x00000000}$. For `mahabir_kdf`, which does not accept a `pepper` parameter, $K$ (pepper) is similarly hardcoded as empty ($\text{LE32}(|K|) = \text{0x00000000}$).
 *   **Initial Block Generation**: The first two columns of each lane are derived from $H_0$ via BLAKE3-XOF:
     $$B[i][j] = \text{BLAKE3-XOF}(H_0 \mathbin{\Vert} \text{LE32}(j) \mathbin{\Vert} \text{LE32}(i), 1024)$$
