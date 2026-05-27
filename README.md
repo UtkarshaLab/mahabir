@@ -1,10 +1,10 @@
-# 🌌 Mahabir
+# Mahabir
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: CC0](https://img.shields.io/badge/License-CC0-green.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
-[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)](#-multi-architecture-support-status)
-[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)](#-multi-architecture-support-status)
-[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-Reserved-yellow.svg)](#-multi-architecture-support-status)
+[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)](#multi-architecture-support-status)
+[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)](#multi-architecture-support-status)
+[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-Reserved-yellow.svg)](#multi-architecture-support-status)
 
 > **Mahabir** is a zero-dependency, unified cryptography library written entirely in assembly.
 > Fast modes (hash, MAC, KDF, XOF) use BLAKE3. Memory-hard modes (password, KDF) use the
@@ -48,29 +48,29 @@
 
 ---
 
-## 📖 Table of Contents
-1. [Development Status](#-development-status)
-2. [Multi-Architecture Support Status](#-multi-architecture-support-status)
-3. [Project Architecture](#-project-architecture)
-4. [Project Layout](#-project-layout)
-5. [Unified API Reference](#-unified-api-reference)
+## Table of Contents
+1. [Development Status](#development-status)
+2. [Multi-Architecture Support Status](#multi-architecture-support-status)
+3. [Project Architecture](#project-architecture)
+4. [Project Layout](#project-layout)
+5. [Unified API Reference](#unified-api-reference)
     - [Fast Modes (Standalone BLAKE3)](#fast-modes-standalone-blake3)
     - [Hard Modes (Memory-Hard Argon2id)](#hard-modes-memory-hard-argon2id)
-6. [Algorithm & Internal Specifications](#-algorithm--internal-specifications)
+6. [Algorithm & Internal Specifications](#algorithm--internal-specifications)
     - [BLAKE3 Layout & Primitive](#1-blake3-layout--primitive)
     - [Argon2id Memory-Hard Core](#2-argon2id-memory-hard-core)
     - [G Mixing & GB Block Compression](#3-g-mixing--gb-block-compression)
     - [Thread Sync & Segment Barriers](#4-thread-sync--segment-barriers)
     - [Runtime CPU SIMD Dispatching](#5-runtime-cpu-simd-dispatching)
-7. [Building & Compiling](#-building--compiling)
-8. [Verification & Testing](#-verification--testing)
-9. [Benchmarking](#-benchmarking)
-10. [Security Considerations](#-security-considerations)
-11. [Licensing](#-licensing)
+7. [Building & Compiling](#building--compiling)
+8. [Verification & Testing](#verification--testing)
+9. [Benchmarking](#benchmarking)
+10. [Security Considerations](#security-considerations)
+11. [Licensing](#licensing)
 
 ---
 
-## 🗺️ Multi-Architecture Support Status
+## Multi-Architecture Support Status
 
 Mahabir is designed for efficiency, using CPU-specific assembly:
 
@@ -80,7 +80,7 @@ Mahabir is designed for efficiency, using CPU-specific assembly:
 
 ---
 
-## 🏛️ Project Architecture
+## Project Architecture
 
 Mahabir separates its foundation (standalone BLAKE3) from the memory-hard application layers. The top-level system is unified through a single API dispatcher.
 
@@ -118,7 +118,7 @@ graph TD
 
 ---
 
-## 📂 Project Layout
+## Project Layout
 
 ```
 mahabir/
@@ -179,7 +179,7 @@ mahabir/
 
 ---
 
-## ⚙️ Unified API Reference
+## Unified API Reference
 
 Mahabir provides a unified interface. Fast modes bypass memory allocation pipelines, while Hard modes utilize multi-threaded memory-hard structures.
 
@@ -247,7 +247,7 @@ int mahabir_kdf(const uint8_t *secret, size_t secret_len,
 
 ---
 
-## 🧠 Algorithm & Internal Specifications
+## Algorithm & Internal Specifications
 
 ### 1. BLAKE3 Layout & Primitive
 The standalone `blake3/` core utilizes the official state structure layout to compute compression nodes inside a binary tree configuration:
@@ -333,7 +333,7 @@ At startup, Mahabir queries CPU features (such as CPUID leaf 1 & 7 on `x86_64`) 
 
 ---
 
-## 🛠️ Building & Compiling
+## Building & Compiling
 
 The top-level `Makefile` orchestrates compilation. It will automatically build the standalone BLAKE3 library, build the Mahabir proper engine, link them together, and run testing executables.
 
@@ -360,7 +360,7 @@ make ARCH=aarch64
 
 ---
 
-## 🧪 Verification & Testing
+## Verification & Testing
 
 To run the complete test suite:
 ```bash
@@ -377,7 +377,7 @@ Test vectors will be generated from a Python reference implementation and valida
 
 ---
 
-## 📊 Benchmarking
+## Benchmarking
 
 Benchmarks are planned. `make bench` will be enabled once scalar paths are complete.
 
@@ -389,7 +389,7 @@ Benchmarks are planned. `make bench` will be enabled once scalar paths are compl
 
 ---
 
-## 🔒 Security Considerations
+## Security Considerations
 
 > [!CAUTION]
 > **Not for production use.** This is a research and educational implementation. It has not undergone formal audit or cryptanalysis. For production password hashing, use libsodium or argon2-rs.
@@ -401,7 +401,7 @@ Benchmarks are planned. `make bench` will be enabled once scalar paths are compl
 
 ---
 
-## 📄 Licensing
+## Licensing
 
 *   **Specification & Documentation**: Licensed under the **Creative Commons Zero 1.0 Universal License (CC0)** (Public Domain Dedication). Feel free to use the blueprints to build your own implementations.
 *   **Code Implementation (including BLAKE3 assembly files)**: All source code files, Makefiles, headers, and test scripts are dual-licensed under the **MIT License**.
