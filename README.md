@@ -266,7 +266,7 @@ The standalone `blake3/` core utilizes the official state structure layout to co
 
 ### 2. Argon2id Memory-Hard Core
 The hard mode is a hybrid construction incorporating the **Argon2id** design (RFC 9106):
-*   **Parameter Limits**: Parallelism $p \le 2^{24}$, tag size $T \ge 4$, memory blocks $m \ge 8p$, iterations $t \ge 1$, salt $8 \le S \le 64$ bytes, pepper $0 \le P \le 64$ bytes.
+*   **Parameter Limits**: Parallelism $p \le 2^{24}$, tag size $T \ge 4$, memory blocks $m \ge 8p$, iterations $t \ge 1$, salt $8 \le S \le 64$ bytes, pepper $0 \le K \le 64$ bytes.
 *   **H0 Hash Block**: Derived by processing little-endian concatenated configuration parameters. Formula:
     $$H_0 = \text{BLAKE3-XOF}(\text{LE32}(p) \mathbin{\Vert} \text{LE32}(T) \mathbin{\Vert} \text{LE32}(m) \mathbin{\Vert} \text{LE32}(t) \mathbin{\Vert} \text{LE32}(0\text{x}14) \mathbin{\Vert} \text{LE32}(2) \mathbin{\Vert} \text{LE32}(|P|) \mathbin{\Vert} P \mathbin{\Vert} \text{LE32}(|S|) \mathbin{\Vert} S \mathbin{\Vert} \text{LE32}(|K|) \mathbin{\Vert} K \mathbin{\Vert} \text{LE32}(|X|) \mathbin{\Vert} X)$$
     *Where $0\text{x}14$ is the Mahabir version (20 decimal) and $2$ is the type indicating the Argon2id construction.*
@@ -288,22 +288,22 @@ The hard mode is a hybrid construction incorporating the **Argon2id** design (RF
     $$6. \quad d \leftarrow \text{ROTR64}(d \oplus a, 16)$$
     $$7. \quad c \leftarrow c + d + (2 \cdot (c \bmod 2^{32}) \cdot (d \bmod 2^{32}))$$
     $$8. \quad b \leftarrow \text{ROTR64}(b \oplus c, 63)$$
-*   **GB Compression**: Sized at 128 words (8 rows × 16 columns of 64-bit words). It takes two blocks $X$ and $Y$, performs an element-wise XOR $R = X \oplus Y$, and then loops:
-    1.  Applies the $G$ permutation (with LSB32 multiply term) across the 8 rows (8 G calls).
-    2.  Applies the $G$ permutation (with LSB32 multiply term) across the 8 columns (8 G calls).
-    3.  Element-wise XORs the output with the initial matrix: $\text{Out} = \text{Result} \oplus R$.
+*   **GB Compression**: Sized at 1024 bytes, representing an 8×8 matrix of 16-byte registers (128 × 64-bit words). It takes two blocks $X$ and $Y$, performs an element-wise XOR $R = X \oplus Y$, and then loops:
+    1.  Applies the $P$ permutation (1 BLAKE2b-style round of 8 $G$ calls) across each of the 8 rows (64 G calls total).
+    2.  Applies the $P$ permutation (1 BLAKE2b-style round of 8 $G$ calls) across each of the 8 columns (64 G calls total).
+    3.  Performs an element-wise XOR of the output with $R$: $\text{Out} = \text{Result} \oplus R$ (making 128 G calls per block compression).
 
 ```
-     8 Rows of 16 Columns (64-bit Words)
-  +─────────────────────────────────────────+
-  │ w0  w1  w2  w3  w4  w5  w6  w7  ... w15 │ -> Row 0 (4 G Mixers)
-  │ w16 w17 w18 w19 w20 w21 w22 w23 ... w31 │ -> Row 1 (4 G Mixers)
-  │ ...                                     │
-  │ w112 ...                       ... w127 │ -> Row 7 (4 G Mixers)
-  +─────────────────────────────────────────+
-     │   │   │   │
-     ▼   ▼   ▼   ▼ 
-   Col 0,1,2,3 (G Column Mixer Cycles)
+     8×8 Matrix of 16-Byte Registers (128 × 64-bit Words)
+  +─────────────────────────────────────────────────────────────+
+  │ reg0 [w0,w1]  reg1 [w2,w3]  reg2 [w4,w5]  ...  reg7 [w14,w15] │ -> Row 0 (1 P Permutation, 8 G Mixers)
+  │ reg8 [w16,w17]                                              │ -> Row 1 (1 P Permutation, 8 G Mixers)
+  │ ...                                                         │
+  │ reg56 [w112,w113]                                           │ -> Row 7 (1 P Permutation, 8 G Mixers)
+  +─────────────────────────────────────────────────────────────+
+     │             │             │             │
+     ▼             ▼             ▼             ▼ 
+   Col 0         Col 1         Col 2         Col 7 (8 Column P Permutations)
 ```
 
 ### 4. Thread Sync & Segment Barriers
