@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: CC0](https://img.shields.io/badge/License-CC0-green.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
-[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)]()
-[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]()
-[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-yellow.svg)]()
+[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)]
+[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]
+[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-yellow.svg)]
 
 > **Mahabir** is a zero-dependency, unified cryptography library written entirely in assembly.
 > Fast modes (hash, MAC, KDF, XOF) use BLAKE3. Memory-hard modes (password, KDF) use the
@@ -94,7 +94,7 @@ graph TD
     Fast --> B3_SSE2[BLAKE3 SSE2]
     Fast --> B3_SSE41[BLAKE3 SSE4.1]
     Fast --> B3_AVX2[BLAKE3 AVX2]
-    Fast --> B3_AVX512[BLAKE3 AVX512]
+    Fast --> B3_AVX512[BLAKE3 AVX-512]
     
     %% Hard Path
     API -->|m >= 8p, t >= 1| Hard[Hard Path: memory-hard]
@@ -211,7 +211,7 @@ void mahabir_xof(const uint8_t *data, size_t len, uint8_t *out, size_t out_len);
 *   **Description**: Extendable Output Function. Produces an arbitrary stream of pseudo-random bytes of length `out_len` based on the input.
 
 ### Return Codes
-All API functions that return an integer status use the following predefined return codes:
+Fast modes (hash, keyed, derive, xof) return `void`. Hard modes (password, kdf) return `int` indicating status:
 
 ```c
 // Return codes
@@ -278,28 +278,28 @@ The hard mode is a hybrid construction incorporating the **Argon2id** design (RF
     *   **Mapping Bias**: Implements $\Phi_{\text{map}} = (J_1 \times J_1) \gg 32$ to skew references toward recently computed blocks, defeating Time-Memory Trade-Off (TMTO) attacks.
 
 ### 3. G Mixing & GB Block Compression
-*   **G Permutation**: Unlike BLAKE3's 32-bit logic, the memory-hard $G$ mixing function utilizes **64-bit words** (similar to BLAKE2b) and performs additions, XORs, and rotations with constant offsets `{32, 24, 16, 63}`.
-    *G mixing function pseudocode for 64-bit state words $a, b, c, d$ and two 64-bit inputs $x, y$:*
-    $$1. \quad a \leftarrow a + b + (x + y)$$
+*   **G Permutation**: Unlike BLAKE3's 32-bit logic, the memory-hard $G$ mixing function utilizes **64-bit words** with the LSB32 multiply term from Argon2id (RFC 9106 §3.5). The `2 * LSB32(a) * LSB32(b)` term is the latency-hardening core — it cannot be optimized away by ASIC or GPU attackers.
+    *G mixing function pseudocode for 64-bit state words $a, b, c, d$:*
+    $$1. \quad a \leftarrow a + b + (2 \cdot (a \bmod 2^{32}) \cdot (b \bmod 2^{32}))$$
     $$2. \quad d \leftarrow \text{ROTR64}(d \oplus a, 32)$$
-    $$3. \quad c \leftarrow c + d$$
+    $$3. \quad c \leftarrow c + d + (2 \cdot (c \bmod 2^{32}) \cdot (d \bmod 2^{32}))$$
     $$4. \quad b \leftarrow \text{ROTR64}(b \oplus c, 24)$$
-    $$5. \quad a \leftarrow a + b$$
+    $$5. \quad a \leftarrow a + b + (2 \cdot (a \bmod 2^{32}) \cdot (b \bmod 2^{32}))$$
     $$6. \quad d \leftarrow \text{ROTR64}(d \oplus a, 16)$$
-    $$7. \quad c \leftarrow c + d$$
+    $$7. \quad c \leftarrow c + d + (2 \cdot (c \bmod 2^{32}) \cdot (d \bmod 2^{32}))$$
     $$8. \quad b \leftarrow \text{ROTR64}(b \oplus c, 63)$$
 *   **GB Compression**: Sized at 128 words (8 rows × 16 columns of 64-bit words). It takes two blocks $X$ and $Y$, performs an element-wise XOR $R = X \oplus Y$, and then loops:
-    1.  Applies the $G$ permutation across the 8 rows (8 G calls).
-    2.  Applies the $G$ permutation across the 8 columns (8 G calls).
+    1.  Applies the $G$ permutation (with LSB32 multiply term) across the 8 rows (8 G calls).
+    2.  Applies the $G$ permutation (with LSB32 multiply term) across the 8 columns (8 G calls).
     3.  Element-wise XORs the output with the initial matrix: $\text{Out} = \text{Result} \oplus R$.
 
 ```
      8 Rows of 16 Columns (64-bit Words)
   +─────────────────────────────────────────+
-  │ w0  w1  w2  w3  w4  w5  w6  w7  ... w15 │ -> Row 0 (G Mixer 0)
-  │ w16 w17 w18 w19 w20 w21 w22 w23 ... w31 │ -> Row 1 (G Mixer 1)
+  │ w0  w1  w2  w3  w4  w5  w6  w7  ... w15 │ -> Row 0 (4 G Mixers)
+  │ w16 w17 w18 w19 w20 w21 w22 w23 ... w31 │ -> Row 1 (4 G Mixers)
   │ ...                                     │
-  │ w112 ...                       ... w127 │ -> Row 7 (G Mixer 7)
+  │ w112 ...                       ... w127 │ -> Row 7 (4 G Mixers)
   +─────────────────────────────────────────+
      │   │   │   │
      ▼   ▼   ▼   ▼ 
@@ -332,7 +332,7 @@ At startup, Mahabir queries CPU features (such as CPUID leaf 1 & 7 on `x86_64`) 
 | **AVX2** | AVX2 vector path | 4 parallel channels, wide row scheduling | `YMM0`–`YMM15` |
 | **AVX512** | AVX512 + `vprorq` | 8 parallel channels, native 64-bit rotates | `ZMM0`–`ZMM31` |
 
-*Note: SSE2 is not utilized for Mahabir G/GB due to 32-bit register partition limits.*
+*Note: SSE2 is omitted for G/GB — its 32-bit lanes cannot perform the 64-bit rotations and 32-bit LSB32 multiply required by Argon2id's G function.*
 
 ---
 
@@ -400,6 +400,7 @@ Benchmarks are planned. `make bench` will be enabled once scalar paths are compl
 *   **Planned State Zeroization**: Volatile state zeroization using explicit memory barriers and fences (e.g., `mfence`) to wipe state variables, message blocks, and the memory pool matrix clean, preventing compiler elision.
 *   **Planned Constant-Time Comparison**: XOR-based lane reduction to evaluate password comparisons in constant time, preventing timing side-channel leaks.
 *   **Planned Thread-Safe Initialization**: Thread-safe dispatch table initialization via `compare-and-swap` (atomic operations) on the initialization flag.
+*   **Latency Hardening**: The `G` function's `2 * LSB32(a) * LSB32(b)` multiply term is Argon2id's primary ASIC/FPGA defense. XOR and ADD are cheap on custom silicon; dependent 32-bit multiply is not. This term forces attackers to CPU-like clock speeds regardless of parallelism.
 
 ---
 
