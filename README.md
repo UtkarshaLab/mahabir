@@ -288,10 +288,7 @@ The hard mode is a hybrid construction incorporating the **Argon2id** design (RF
     $$6. \quad d \leftarrow \text{ROTR64}(d \oplus a, 16)$$
     $$7. \quad c \leftarrow c + d + (2 \cdot (c \bmod 2^{32}) \cdot (d \bmod 2^{32}))$$
     $$8. \quad b \leftarrow \text{ROTR64}(b \oplus c, 63)$$
-*   **GB Compression**: Sized at 1024 bytes, representing an 8×8 matrix of 16-byte registers (128 × 64-bit words). It takes two blocks $X$ and $Y$, performs an element-wise XOR $R = X \oplus Y$, and then loops:
-    1.  Applies the $P$ permutation (1 BLAKE2b-style round of 8 $G$ calls) across each of the 8 rows (64 G calls total).
-    2.  Applies the $P$ permutation (1 BLAKE2b-style round of 8 $G$ calls) across each of the 8 columns (64 G calls total).
-    3.  Performs an element-wise XOR of the output with $R$: $\text{Out} = \text{Result} \oplus R$ (making 128 G calls per block compression).
+*   **GB Compression**: The 1024-byte block is an 8×8 matrix of 16-byte registers (128 $u64$ words). $R = X \oplus Y$, then $P$ is applied to each of the 8 rows and each of the 8 columns — 16 $P$-applications total. Each $P$ is one BLAKE2b-style round of 8 $G$ calls, so GB performs 128 $G$ calls. Output = $\text{Result} \oplus R$.
 
 ```
      8×8 Matrix of 16-Byte Registers (128 × 64-bit Words)
