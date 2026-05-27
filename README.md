@@ -6,7 +6,10 @@
 [![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]()
 [![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-yellow.svg)]()
 
-> **Mahabir** is a ultra-high-performance, zero-dependency, unified cryptography library written entirely in highly optimized assembly (NASM for x86_64, with AArch64 and RISC-V architectures reserved for future implementation). It fuses a standalone assembly implementation of the state-of-the-art **BLAKE3** hash with a highly parallelizable memory-hard password hashing and key derivation function modeled after **Argon2id** (RFC 9106).
+> **Mahabir** is a zero-dependency, unified cryptography library written entirely in assembly.
+> Fast modes (hash, MAC, KDF, XOF) use BLAKE3. Memory-hard modes (password, KDF) use an
+> Argon2id construction with BLAKE3 at its core. x86_64 in active development.
+> AArch64 and RISC-V reserved for future implementation.
 >
 > _This library is named in honor of **Dr. Mahabir Pun**, a distinguished Nepalese teacher, scientist, and social entrepreneur renowned for his pioneering work in introducing wireless technologies to remote mountainous communities and fostering national innovation._
 
@@ -192,7 +195,16 @@ void mahabir_xof(const uint8_t *data, size_t len, uint8_t *out, size_t out_len);
 ```
 *   **Description**: Extendable Output Function. Produces an arbitrary stream of pseudo-random bytes of length `out_len` based on the input.
 
----
+### Return Codes
+All API functions that return an integer status use the following predefined return codes:
+
+```c
+// Return codes
+#define MAHABIR_OK          0  // Success
+#define MAHABIR_ERR_PARAM   1  // Invalid parameter (e.g., m < 8p, salt < 8 bytes)
+#define MAHABIR_ERR_MEMORY  2  // mmap/munmap failure
+#define MAHABIR_ERR_THREAD  3  // Thread spawn/join failure
+```
 
 ### Hard Modes (Memory-Hard Argon2id)
 These functions utilize multi-threaded memory-hard constructs to defend against custom ASIC/FPGA dictionary attacks.
@@ -276,13 +288,24 @@ The hard mode is a hybrid construction incorporating the **Argon2id** design (RF
 ### 5. Runtime CPU SIMD Dispatching
 At startup, Mahabir executes feature queries (such as CPUID leaf 1 & 7 on `x86_64`) to identify instruction capabilities. The optimal vector implementation is selected dynamically:
 
-| CPU Target | BLAKE3 Dispatch | Mahabir G / GB Pipeline | Registers Sinks |
+#### BLAKE3 CPU Dispatching
+| CPU Target | SIMD Optimization | Parallel Compression Instances | Sinks |
 | :--- | :--- | :--- | :--- |
-| **Scalar** | Scalar fallback | 64-bit additions, XORs, ROTR64 | Standard registers |
-| **SSE2** | 2 parallel instances | *Not utilized (32-bit lane limits)* | `XMM0`–`XMM7` |
-| **SSE4.1** | 2 parallel + shuffles | 2 parallel channels, `pshufb` 64-bit shuffles | `XMM0`–`XMM15` |
-| **AVX2** | 4 parallel instances | 4 parallel channels, wide message scheduling | `YMM0`–`YMM15` |
-| **AVX512** | 8 parallel instances | 8 parallel channels, native `vprorq` instructions | `ZMM0`–`ZMM31` |
+| **Scalar** | Fallback baseline | 1 instance | Standard registers |
+| **SSE2** | SSE2 vector path | 2 parallel instances | `XMM0`–`XMM7` |
+| **SSE4.1** | SSE4.1 + shuffles | 2 parallel instances | `XMM0`–`XMM15` |
+| **AVX2** | AVX2 vector path | 4 parallel instances | `YMM0`–`YMM15` |
+| **AVX512** | AVX512 vector path | 8 parallel instances | `ZMM0`–`ZMM31` |
+
+#### Mahabir G / GB CPU Dispatching
+| CPU Target | SIMD Optimization | G / GB Pipeline Capabilities | Sinks |
+| :--- | :--- | :--- | :--- |
+| **Scalar** | Fallback baseline | 64-bit additions, XORs, ROTR64 | Standard registers |
+| **SSE4.1** | SSE4.1 + `pshufb` | 2 parallel channels, 64-bit shuffles | `XMM0`–`XMM15` |
+| **AVX2** | AVX2 vector path | 4 parallel channels, wide row scheduling | `YMM0`–`YMM15` |
+| **AVX512** | AVX512 + `vprorq` | 8 parallel channels, native 64-bit rotates | `ZMM0`–`ZMM31` |
+
+*Note: SSE2 is not utilized for Mahabir G/GB due to 32-bit register partition limits.*
 
 ---
 
@@ -290,8 +313,10 @@ At startup, Mahabir executes feature queries (such as CPUID leaf 1 & 7 on `x86_6
 
 The top-level `Makefile` orchestrates compilation. It will automatically build the standalone BLAKE3 library, build the Mahabir proper engine, link them together, and run testing executables.
 
-### Prerequisites
-*   **Operating System**: Linux (highly optimized syscall path) or Windows (via MSYS2/MinGW).
+### Target Platforms & Prerequisites
+*   **Linux**: Primary target. Tested on x86_64.
+*   **macOS**: Planned — not yet tested.
+*   **Windows**: Experimental — requires MSYS2/MinGW. Not yet tested.
 *   **Assembler**: `NASM` (for x86_64) and `GNU binutils` (assembler and linker).
 *   **Compilers/Tools**: GNU `make`, `gcc` (for test orchestration and harness setup).
 
@@ -329,12 +354,12 @@ make test
 
 ## 📊 Benchmarking
 
-To run latency and throughput benchmarks:
+To run latency and throughput benchmarks (planned):
 ```bash
 make bench
 ```
 
-### Metrics Checked
+### Planned Benchmarks
 *   **Throughput (Fast)**: Evaluates MiB/sec rates for basic hashes. Shows SIMD scaling efficiency.
 *   **Latency (Hard)**: Evaluates exact cycle counts for memory-hard operations.
 *   **Memory Footprint**: Verifies actual Peak Resident Set Size (RSS) during execution by parsing `/proc/self/status`.
@@ -344,8 +369,8 @@ make bench
 
 ## 🔒 Security Considerations
 
-> [!WARNING]  
-> **Cryptographic Implementation Notice**: This library utilizes hand-crafted, raw assembly language. Although designed for high-performance and audited for memory protection, use it with standard caution inside highly critical production systems.
+> [!CAUTION]
+> **Not for production use.** This is a research and educational implementation. It has not undergone formal audit or cryptanalysis. For production password hashing, use libsodium or argon2-rs.
 
 *   **Volatile State Zeroization**: State variables, message blocks, and the memory pool matrix are wiped clean using the `ZEROIZE` macro (volatile store operations + memory fences like `mfence`) to prevent compilers or optimization steps from optimizing away the cleanup.
 *   **Constant-Time Comparisons**: Password comparisons are evaluated using double XOR reduction loops, preventing timing side-channel attacks.
