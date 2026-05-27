@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: CC0](https://img.shields.io/badge/License-CC0-green.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
-[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)]
-[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]
-[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-yellow.svg)]
+[![x86_64: Development](https://img.shields.io/badge/x86__64-Development-orange.svg)]()
+[![AArch64: Reserved](https://img.shields.io/badge/AArch64-Reserved-yellow.svg)]()
+[![RISC-V: Reserved](https://img.shields.io/badge/RISC--V-Reserved-yellow.svg)]()
 
 > **Mahabir** is a zero-dependency, unified cryptography library written entirely in assembly.
 > Fast modes (hash, MAC, KDF, XOF) use BLAKE3. Memory-hard modes (password, KDF) use the
@@ -89,7 +89,7 @@ graph TD
     User([User Application]) --> API{Mahabir API}
     
     %% Fast Path
-    API -->|m = 0, t = 1| Fast[Fast Path: Direct BLAKE3]
+    API -->|m = 0| Fast[Fast Path: Direct BLAKE3]
     Fast --> B3_Scalar[BLAKE3 Scalar]
     Fast --> B3_SSE2[BLAKE3 SSE2]
     Fast --> B3_SSE41[BLAKE3 SSE4.1]
@@ -97,7 +97,7 @@ graph TD
     Fast --> B3_AVX512[BLAKE3 AVX-512]
     
     %% Hard Path
-    API -->|m >= 8p, t >= 1| Hard[Hard Path: memory-hard]
+    API -->|m >= 8p| Hard[Hard Path: memory-hard]
     Hard --> Init[H0 Generation via BLAKE3 XOF]
     Init --> FillInit[H' First 2 Columns Init]
     FillInit --> MMap[Memory Pool Allocation]
@@ -327,10 +327,10 @@ At startup, Mahabir queries CPU features (such as CPUID leaf 1 & 7 on `x86_64`) 
 #### Mahabir G / GB CPU Dispatching
 | CPU Target | SIMD Optimization | G / GB Pipeline Capabilities | Sinks |
 | :--- | :--- | :--- | :--- |
-| **Scalar** | Fallback baseline | 64-bit additions, XORs, ROTR64 | Standard registers |
-| **SSE4.1** | SSE4.1 + `pshufb` | 2 parallel channels, 64-bit shuffles | `XMM0`–`XMM15` |
-| **AVX2** | AVX2 vector path | 4 parallel channels, wide row scheduling | `YMM0`–`YMM15` |
-| **AVX512** | AVX512 + `vprorq` | 8 parallel channels, native 64-bit rotates | `ZMM0`–`ZMM31` |
+| **Scalar** | Fallback baseline | 64-bit additions, XORs, ROTR64, scalar 32x32->64 multiply | Standard registers |
+| **SSE4.1** | SSE4.1 + `pshufb` | 2 parallel channels, 64-bit shuffles, `pmuludq` multiply | `XMM0`–`XMM15` |
+| **AVX2** | AVX2 vector path | 4 parallel channels, wide row scheduling, `pmuludq` multiply | `YMM0`–`YMM15` |
+| **AVX512** | AVX512 + `vprorq` | 8 parallel channels, native rotates, `vpmuludq` multiply | `ZMM0`–`ZMM31` |
 
 *Note: SSE2 is omitted for G/GB — its 32-bit lanes cannot perform the 64-bit rotations and 32-bit LSB32 multiply required by Argon2id's G function.*
 
