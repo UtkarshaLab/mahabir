@@ -1,0 +1,1 @@
+; Mahabir hard — XOR finalize
